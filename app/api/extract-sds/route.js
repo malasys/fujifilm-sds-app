@@ -1,18 +1,6 @@
 // app/api/extract-sds/route.js
 import { NextResponse } from 'next/server';
 
-const SYSTEM_PROMPT = `あなたはFUJIFILM Wako Pure ChemicalのSafety Data Sheet（SDS）の専門アシスタントです。
-与えられたSDS本文から、ユーザーが指定した情報を正確に日本語で抜粋してください。
-
-出力形式：
-- 各セクションを見出し（## セクション名）で区切る
-- 絵表示はGHSピクトグラム名をリスト形式で記載
-- 成分情報は表形式（成分名 | CAS番号 | 含有量）で記載
-- 物理的性質は表形式で記載
-- その他は箇条書きまたは原文に近い形式で記載
-- 情報が見つからない場合は「記載なし」と明記
-- 余分なコメントや前置きは不要。抜粋内容のみ出力すること。`;
-
 export async function POST(request) {
   try {
     const { query, sections } = await request.json();
@@ -21,41 +9,54 @@ export async function POST(request) {
       return NextResponse.json({ error: "物質名が指定されていません" }, { status: 400 });
     }
 
-    const searchPrompt = `FUJIFILMのWako Pure Chemical（和光純薬）のウェブサイトから「${query}」のSafety Data Sheet（SDS/安全データシート）を取得してください。
+    // Geminiへの指示文（プロンプト）
+    const prompt = `あなたはFUJIFILM Wako Pure ChemicalのSafety Data Sheet（SDS）の専門アシスタントです。
+Google検索機能を使って、FUJIFILMのWako Pure Chemical（和光純薬）のウェブサイトから「${query}」のSafety Data Sheet（SDS/安全データシート）の最新情報を検索・取得してください。
 
-以下の情報を抜粋して日本語で返してください：
-${sections.map((l, i) => `${i + 1}. ${l}`).join('\n')}
+取得した情報から、以下の項目を正確に日本語で抜粋してください：
+${sections.map((l) => `- ${l}`).join('\n')}
 
-物質名「${query}」のSDSが見つかった場合、最初の行に「URL: [URL]」の形式で引用元のURLを記載してから、各情報を抽出してください。
-見つからない場合は「見つかりませんでした」とのみ回答してください。`;
+【出力形式】
+- 最初の行に必ず「URL: [検索で見つけたSDSのURL]」の形式で引用元URLを記載してください。
+- 各セクションを見出し（## セクション名）で区切る
+- 絵表示はGHSピクトグラム名をリスト形式で記載
+- 成分情報は表形式（成分名 | CAS番号 | 含有量）で記載
+- 物理的性質は表形式で記載
+- その他は箇条書きまたは原文に近い形式で記載
+- 情報が見つからない場合は「記載なし」と明記
+- 余分なコメントや前置きは一切不要。URLと抜粋内容のみを出力すること。`;
 
-    // Anthropic APIへのリクエスト (サーバー側で実行されるためCORSエラーにならず、APIキーも漏れません)
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY, // Vercelの環境変数から取得します
-        "anthropic-version": "2023-06-01"
-      },
-      body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 2000,
-        system: SYSTEM_PROMPT,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
-        messages: [{ role: "user", content: searchPrompt }]
-      })
-    });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY が設定されていません。");
+    }
+
+    // Google AI Studio (Gemini 1.5 Flash) へのリクエスト
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          // 無料でGoogle検索を連動させる設定
+          tools: [{ googleSearch: {} }]
+        })
+      }
+    );
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error?.message || "APIリクエストに失敗しました");
+      throw new Error(data.error?.message || "Gemini APIリクエストに失敗しました");
     }
 
-    const fullText = data.content
-      .filter(b => b.type === "text")
-      .map(b => b.text)
-      .join("\n");
+    // AIの返答テキストを抽出
+    const fullText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    if (!fullText) {
+      throw new Error("SDSの情報を取得できませんでした。");
+    }
 
     return NextResponse.json({ text: fullText });
 
