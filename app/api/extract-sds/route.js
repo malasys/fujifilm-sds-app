@@ -30,15 +30,15 @@ ${sections.map((l) => `- ${l}`).join('\n')}
       throw new Error("GEMINI_API_KEY が設定されていません。");
     }
 
-    // エンドポイントを正式版の「v1」に、モデルを「gemini-2.5-flash」に変更
+    // 正解の組み合わせ：【v1beta】のエンドポイント ＋ 【gemini-2.0-flash】モデル
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ googleSearch: {} }] // Google検索を連動させる設定
+          tools: [{ googleSearch: {} }] // v1betaなのでこの検索ツールが正常に認識されます
         })
       }
     );
