@@ -9,7 +9,6 @@ export async function POST(request) {
       return NextResponse.json({ error: "物質名が指定されていません" }, { status: 400 });
     }
 
-    // Geminiへの指示文（プロンプト）
     const prompt = `あなたはFUJIFILM Wako Pure ChemicalのSafety Data Sheet（SDS）の専門アシスタントです。
 Google検索機能を使って、FUJIFILMのWako Pure Chemical（和光純薬）のウェブサイトから「${query}」のSafety Data Sheet（SDS/安全データシート）の最新情報を検索・取得してください。
 
@@ -31,16 +30,15 @@ ${sections.map((l) => `- ${l}`).join('\n')}
       throw new Error("GEMINI_API_KEY が設定されていません。");
     }
 
-    // Google AI Studio (Gemini 1.5 Flash) へのリクエスト
+    // エンドポイントを正式版の「v1」に、モデルを「gemini-2.5-flash」に変更
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          // 無料でGoogle検索を連動させる設定
-          tools: [{ googleSearch: {} }]
+          tools: [{ googleSearch: {} }] // Google検索を連動させる設定
         })
       }
     );
@@ -51,7 +49,6 @@ ${sections.map((l) => `- ${l}`).join('\n')}
       throw new Error(data.error?.message || "Gemini APIリクエストに失敗しました");
     }
 
-    // AIの返答テキストを抽出
     const fullText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     if (!fullText) {
