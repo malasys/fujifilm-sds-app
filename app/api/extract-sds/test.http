@@ -1,0 +1,8 @@
+### APIのテスト
+POST http://localhost:3000/api/extract-sds
+Content-Type: application/json
+
+{
+  "pdfUrl": "https://labchem-wako.fujifilm.com/sds/W01W0119-0166JGHEJP.pdf",
+  "sections": ["組成及び成分情報", "危険有害性の要約"]
+}
