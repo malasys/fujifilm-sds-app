@@ -39,7 +39,7 @@ export default function Home() {
 
       const data = await response.json();
       
-      if (!response.ok) throw new Error(data.error);
+      if (!response.ok) throw new Error(data.error || "APIエラーが発生しました");
       if (!data.text || data.text.includes("見つかりませんでした")) {
         setStep("error");
         setError(`「${query}」のSDSが見つかりませんでした。`);
@@ -54,9 +54,11 @@ export default function Home() {
       setResult(cleanedText);
       setStep("done");
 
-    } catch (e) {
+    } catch (e: unknown) {
       setStep("error");
-      setError("エラーが発生しました: " + e.message);
+      // TypeScriptの型チェックをパスするためにエラーメッセージの取得方法を修正
+      const errorMessage = e instanceof Error ? e.message : "不明なエラーが発生しました";
+      setError("エラーが発生しました: " + errorMessage);
     }
   };
 
